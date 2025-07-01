@@ -126,7 +126,7 @@ validation_sampler = SequentialSampler(validation_data); # Samples data sequenti
 validation_dataloader = DataLoader(validation_data, sampler=validation_sampler, batch_size=batch_size);
 
 
-#thanks chatgpt
+#thanks
 model = BertForSequenceClassification.from_pretrained(
     "bert-base-uncased", # Use the 12-layer BERT small model, with an uncased vocab.
     num_labels = 3,
