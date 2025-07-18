@@ -38,9 +38,11 @@ def flat_accuracy(preds, labels):
 
 print ("Train and Test Files Loaded as train.csv and test.csv")
 
+"""
 LABEL_MAP = {0 : "negative", 1 : "neutral", 2 : "positive"}
 NONE = 4 * [None]
 RND_SEED=2020
+"""
 
 def plot_confusion_matrix(y_true,y_predicted):
   cm = metrics.confusion_matrix(y_true, y_predicted)
@@ -110,7 +112,7 @@ train_masks, validation_masks, _, _ = train_test_split(attention_masks,
                                                        test_size=0.15,
                                                        random_state=RND_SEED)
 
-#tensorflowwww
+#torched
 train_inputs = torch.tensor(np.array(X_train));
 validation_inputs = torch.tensor(np.array(X_val));
 train_masks = torch.tensor(np.array(train_masks));
