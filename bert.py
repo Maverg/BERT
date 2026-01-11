@@ -44,6 +44,12 @@ NONE = 4 * [None]
 RND_SEED=2020
 """
 
+RND_SEED = 2020
+np.random.seed(RND_SEED)
+torch.manual_seed(RND_SEED)
+if torch.cuda.is_available():
+  torch.cuda.manual_seed_all(RND_SEED)
+
 def plot_confusion_matrix(y_true,y_predicted):
   cm = metrics.confusion_matrix(y_true, y_predicted)
   print ("Plotting the Confusion Matrix")
@@ -81,44 +87,54 @@ for sentence in sentences_with_special_tokens:
 print(tokenized_texts[0])
 
 #encode with indices
-input_ids = []
-for text in tokenized_texts:
-  new_list = tokenizer.convert_tokens_to_ids(text)
-  input_ids.append(new_list)
-print(input_ids[0])
+encodings = tokenizer(
+    list(sentences),
+    add_special_tokens=True,
+    truncation=True,
+    padding="max_length",
+    max_length=128,
+    return_attention_mask=True,
+    return_tensors="np",
+)
+
+input_ids = encodings["input_ids"]
+attention_masks = encodings["attention_mask"]
+
+print(input_ids[0].tolist())
+print(attention_masks[0].tolist())
+
 #pad
-input_ids = pad_sequences(input_ids,
-                          maxlen=128,
-                          dtype="long",
-                          truncating="post",
-                          padding="post")
+input_ids = input_ids
 
 #attention mask
-attention_masks = []
-for sequence in input_ids:
-  mask = [float(i > 0) for i in sequence]
-  attention_masks.append(mask)
+attention_masks = attention_masks
 print (attention_masks[0])
 
 
 #bert yay
-X_train, X_val, y_train, y_val = train_test_split(input_ids,
-                                                  labels,
-                                                  test_size=0.15,
-                                                  random_state=RND_SEED)
+indices = np.arange(len(input_ids))
+train_idx, val_idx = train_test_split(
+    indices,
+    test_size=0.15,
+    random_state=RND_SEED,
+    stratify=labels
+)
 
-train_masks, validation_masks, _, _ = train_test_split(attention_masks,
-                                                       input_ids,
-                                                       test_size=0.15,
-                                                       random_state=RND_SEED)
+X_train = input_ids[train_idx]
+X_val = input_ids[val_idx]
+y_train = labels[train_idx]
+y_val = labels[val_idx]
+
+train_masks = attention_masks[train_idx]
+validation_masks = attention_masks[val_idx]
 
 #torched
-train_inputs = torch.tensor(np.array(X_train));
-validation_inputs = torch.tensor(np.array(X_val));
-train_masks = torch.tensor(np.array(train_masks));
-validation_masks = torch.tensor(np.array(validation_masks));
-train_labels = torch.tensor(np.array(y_train));
-validation_labels = torch.tensor(np.array(y_val));
+train_inputs = torch.tensor(np.array(X_train), dtype=torch.long);
+validation_inputs = torch.tensor(np.array(X_val), dtype=torch.long);
+train_masks = torch.tensor(np.array(train_masks), dtype=torch.long);
+validation_masks = torch.tensor(np.array(validation_masks), dtype=torch.long);
+train_labels = torch.tensor(np.array(y_train), dtype=torch.long);
+validation_labels = torch.tensor(np.array(y_val), dtype=torch.long);
 batch_size = 32
 train_data = TensorDataset(train_inputs, train_masks, train_labels);
 train_sampler = RandomSampler(train_data); # Samples data randonly for training
@@ -140,12 +156,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 n_gpu = torch.cuda.device_count()
 
 if tf.test.gpu_device_name() == '/device:GPU:0':
-  #specify in pytorch to run this model on the GPU otherwise take forever
-  model.cuda();
+  # specify in pytorch to run this model on the GPU otherwise take forever
+  model.to(device);
 
 #epic
 optimizer = AdamW(model.parameters(),
-                  lr = 2e-5, 
+                  lr = 2e-5,
                   eps = 1e-8
                 )
 epochs = 2
@@ -162,7 +178,7 @@ scheduler = get_linear_schedule_with_warmup(optimizer,
                                             num_warmup_steps = 0, # Default value in run_glue.py
                                             num_training_steps = total_steps)
 
-#store training and validation loss, validation accuracy, and timings.
+#Store training and validation loss, validation accuracy, and timings.
 training_loss = []
 validation_loss = []
 training_stats = []
@@ -181,7 +197,7 @@ for epoch_i in range(0, epochs):
             # Report progress.
             print('  Batch {:>5,}  of  {:>5,}. '.format(step, len(train_dataloader)))
 
-        
+
         # STEP 1 & 2: Unpack this training batch from our dataloader.
         # As we unpack the batch, we'll also copy each tensor to the GPU using the
         # `to` method.
@@ -190,7 +206,7 @@ for epoch_i in range(0, epochs):
         #   [1]: attention masks
         #   [2]: labels
         # Im gonna kms
-        
+
         b_input_ids = batch[0].to(device)
         b_input_mask = batch[1].to(device)
         b_labels = batch[2].to(device)
@@ -206,10 +222,10 @@ for epoch_i in range(0, epochs):
                              token_type_ids=None,
                              attention_mask=b_input_mask,
                              labels=b_labels)
-        loss = outputs[0]
-        logits = outputs[1]
-        # Accumulate the training loss over all of the batches so that we can calculate the average loss at the end. 
-        #`loss` is a Tensor containing a single value; the `.item()` function just returns the Python value from the 
+        loss = outputs.loss
+        logits = outputs.logits
+        # Accumulate the training loss over all of the batches so that we can calculate the average loss at the end.
+        #`loss` is a Tensor containing a single value; the `.item()` function just returns the Python value from the
         #tensor.
         total_train_loss += loss.item()
 
@@ -261,8 +277,8 @@ for epoch_i in range(0, epochs):
                                    token_type_ids=None,
                                    attention_mask=b_input_mask,
                                    labels=b_labels)
-            loss = outputs[0]
-            logits = outputs[1]
+            loss = outputs.loss
+            logits = outputs.logits
 
         # Accumulate the validation loss.
         total_eval_loss += loss.item()
@@ -304,7 +320,7 @@ for epoch_i in range(0, epochs):
 print("Training complete")
 
 
-#we did it
+# we did it
 fig = plt.figure(figsize=(12,6))
 plt.title('Loss over Time')
 plt.xlabel('Epochs')
@@ -334,34 +350,39 @@ test_sentences = ["[CLS] " + sentence + " [SEP]" for sentence in test_sentences]
 tokenized_test_sentences = [tokenizer.tokenize(sent) for sent in test_sentences]
 
 # Encode Tokens to Word IDs
-test_input_ids = [tokenizer.convert_tokens_to_ids(txt) for txt in tokenized_test_sentences]
+test_encodings = tokenizer(
+    list(df_test.Sentence.values),
+    add_special_tokens=True,
+    truncation=True,
+    padding="max_length",
+    max_length=128,
+    return_attention_mask=True,
+    return_tensors="np",
+)
+
+test_input_ids = test_encodings["input_ids"]
+test_attention_masks = test_encodings["attention_mask"]
 
 # Pad inputs
-test_input_ids = pad_sequences(test_input_ids,
-                               maxlen=128,
-                               dtype="long",
-                               truncating="post",
-                               padding="post")
+test_input_ids = test_input_ids
 
 # Create attention masks
-for sequence in test_input_ids:
-  mask = [float(i>0) for i in sequence]
-  test_attention_masks.append(mask)
+test_attention_masks = test_attention_masks
 
 
 
 #convert data to tensors and create dataLoaders
 batch_size = 32
-test_input_ids = torch.tensor(test_input_ids)
-test_attention_masks = torch.tensor(test_attention_masks)
-test_labels = torch.tensor(test_labels)
+test_input_ids = torch.tensor(test_input_ids, dtype=torch.long)
+test_attention_masks = torch.tensor(test_attention_masks, dtype=torch.long)
+test_labels = torch.tensor(test_labels, dtype=torch.long)
 prediction_data = TensorDataset(test_input_ids, test_attention_masks, test_labels)
 prediction_sampler = SequentialSampler(prediction_data)
 prediction_dataloader = DataLoader(prediction_data, sampler=prediction_sampler, batch_size=batch_size)
 
-#Evaluate accuracy
-#Prediction on test set
-#somebody gotta nerf mark zuckerburg and I
+# Evaluate accuracy
+# Prediction on test set
+# somebody gotta nerf mark zuckerburg and I
 
 print('Predicting labels for {:,} test sentences...'.format(len(test_input_ids)))
 
@@ -384,7 +405,7 @@ for batch in prediction_dataloader:
       outputs = model(b_input_ids, token_type_ids=None,
                       attention_mask=b_input_mask)
 
-  logits = outputs[0]
+  logits = outputs.logits
 
   # Move logits and labels to CPU
   logits = logits.detach().cpu().numpy()
