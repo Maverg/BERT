@@ -1,7 +1,7 @@
 
 # Tweet Sentiment + Market Backtesting (BERT)
 
-This project fine-tunes a BERT model to classify financial tweet sentiment (negative / neutral / positive), then evaluates whether aggregated daily sentiment predicts next-day returns.
+This project fine-tunes a BERT model to classify financial tweet sentiment (negative / neutral / positive), then evaluates whether aggregated daily sentiment predicts next-day price returns.
 
 ## What’s included
 - **BERT training + evaluation**: trains a `bert-base-uncased` sequence classifier on a finance sentiment dataset and reports accuracy + confusion matrix.
@@ -23,14 +23,12 @@ This project fine-tunes a BERT model to classify financial tweet sentiment (nega
 - `matplotlib`
 - `seaborn`
 - `gdown`
-
-### Also used (in your current script imports)
 - `tensorflow`
 - `keras`
 
 ### Finance/backtest script extras
 - `scipy`
-- `yfinance` (only if you want to download prices automatically)
+- `yfinance`
 
 ### Install
 ```bash
